@@ -78,8 +78,8 @@ async def main():
         all_articles = []
         base_url = "https://laodong.vn/du-lich/tin-tuc?page="
         
-        # Loop through pages 2 to 400
-        for page in range(1, 400):
+        # Loop through pages 2 to 200
+        for page in range(1, 200):
             page_url = f"{base_url}{page}"
             print(f"Crawling page {page}...")
             

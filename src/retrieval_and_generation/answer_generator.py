@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 from qdrant_client import QdrantClient
 from openai import OpenAI # Using for OpenAI API
 
@@ -9,6 +9,9 @@ load_dotenv()
 
 # Initialize Vietnamese bi-encoder model for retrieval
 retrieval_model = SentenceTransformer('bkai-foundation-models/vietnamese-bi-encoder').to('cuda')
+
+# Initialize cross-encoder model for reranking
+reranker_model = CrossEncoder('BAAI/bge-reranker-base').to('cuda')
 
 # Initialize Qdrant client
 qdrant_client = QdrantClient(
@@ -35,16 +38,22 @@ else:
         print(f"Error initializing OpenAI client: {e}")
         openai_client = None
 
-def get_relevant_chunks(user_query: str, top_k: int = 3) -> list:
+def get_relevant_chunks(user_query: str, top_k: int = 10, rerank_top_k: int = 5) -> list:
     """
     Encodes the user query and retrieves the top_k most relevant chunks
-    from the Qdrant collection.
+    from the Qdrant collection, then reranks them using a cross-encoder model.
+    
+    Args:
+        user_query: The user's query
+        top_k: Number of initial documents to retrieve from Qdrant
+        rerank_top_k: Number of top documents to keep after reranking
     """
-    if not retrieval_model:
-        print("Retrieval model not loaded. Cannot get relevant chunks.")
+    if not retrieval_model or not reranker_model:
+        print("Retrieval or reranking model not loaded. Cannot get relevant chunks.")
         return []
+        
+    # First stage: Retrieve documents using bi-encoder
     query_embedding = retrieval_model.encode(user_query, device='cuda')
-
     search_results = qdrant_client.search(
         collection_name="articles",
         query_vector=query_embedding.tolist(),
@@ -52,20 +61,34 @@ def get_relevant_chunks(user_query: str, top_k: int = 3) -> list:
         with_payload=True
     )
 
-    retrieved_chunks = []
+    # Prepare documents for reranking
+    documents = []
     for hit in search_results:
         payload = hit.payload if hit.payload else {}
         chunk_text = payload.get("text", "")
         if chunk_text:
-            retrieved_chunks.append(
-                {
-                    "text": chunk_text,
-                    "title": payload.get("title", ""),
-                    "url": payload.get("url", ""),
-                    "score": hit.score
-                }
-            )
-    return retrieved_chunks
+            documents.append({
+                "text": chunk_text,
+                "title": payload.get("title", ""),
+                "url": payload.get("url", ""),
+                "initial_score": hit.score
+            })
+
+    if not documents:
+        return []
+
+    # Second stage: Rerank documents using cross-encoder
+    pairs = [(user_query, doc["text"]) for doc in documents]
+    rerank_scores = reranker_model.predict(pairs)
+    
+    # Combine rerank scores with documents
+    for doc, score in zip(documents, rerank_scores):
+        doc["rerank_score"] = float(score)
+    
+    # Sort by rerank score and take top_k
+    reranked_documents = sorted(documents, key=lambda x: x["rerank_score"], reverse=True)[:rerank_top_k]
+    
+    return reranked_documents
 
 def generate_answer_with_openai(user_query: str, retrieved_chunks: list) -> str:
     """
@@ -77,7 +100,7 @@ def generate_answer_with_openai(user_query: str, retrieved_chunks: list) -> str:
 
     context = "\n\n---\n\n".join([chunk["text"] for chunk in retrieved_chunks])
     
-    system_prompt = "Bạn là một trợ lý AI chuyên về du lịch. Dựa vào ngữ cảnh dưới đây để bổ sung cho câu trả lời. Nếu không có ngữ cảnh phù hợp, hãy sử dụng kiến thức của bạn và nói rõ điều đó. Chú ý hãy ưu tiên sử dụng những thông tin mới, từ năm 2024 trở đi."
+    system_prompt = "Bạn là một trợ lý AI chuyên về du lịch. Hãy trả lời dựa trên ngữ cảnh."
     
     user_message_content = f"""Ngữ cảnh:{context} Câu hỏi: {user_query}"""
 
@@ -107,7 +130,7 @@ if __name__ == '__main__':
     if relevant_chunks:
         print(f"Found {len(relevant_chunks)} relevant chunks:")
         for i, chunk_info in enumerate(relevant_chunks):
-            print(f"--- Chunk {i+1} (Score: {chunk_info['score']:.4f}) ---")
+            print(f"--- Chunk {i+1} (Score: {chunk_info['initial_score']:.4f}) ---")
             print(f"Title: {chunk_info['title']}")
             print(f"Text: {chunk_info['text']}") # Uncomment to preview
             print("-" * 20)
