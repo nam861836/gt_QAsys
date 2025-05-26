@@ -1,0 +1,21 @@
+{
+  "name": "gt_qasys",
+  "version": "1.0.0",
+  "description": "AI Chat Application with document-based Q&A",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "start": "concurrently \"npm run start:frontend\" \"npm run start:backend\"",
+    "start:frontend": "cd frontend && npm start",
+    "start:backend": "cd backend && uvicorn main:app --reload",
+    "install:all": "npm install && npm run install:frontend",
+    "install:frontend": "cd frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "proxy": "http://localhost:5000"
+} 
