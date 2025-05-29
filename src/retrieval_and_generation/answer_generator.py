@@ -38,15 +38,15 @@ else:
         print(f"Error initializing OpenAI client: {e}")
         openai_client = None
 
-def get_relevant_chunks(user_query: str, top_k: int = 10, rerank_top_k: int = 5) -> list:
+def get_relevant_chunks(user_query: str, top_k: int = 20, rerank_top_k: int = 10) -> list:
     """
     Encodes the user query and retrieves the top_k most relevant chunks
     from the Qdrant collection, then reranks them using a cross-encoder model.
     
     Args:
         user_query: The user's query
-        top_k: Number of initial documents to retrieve from Qdrant
-        rerank_top_k: Number of top documents to keep after reranking
+        top_k: Number of initial documents to retrieve from Qdrant (default: 20)
+        rerank_top_k: Number of top documents to keep after reranking (default: 10)
     """
     if not retrieval_model or not reranker_model:
         print("Retrieval or reranking model not loaded. Cannot get relevant chunks.")
@@ -55,7 +55,7 @@ def get_relevant_chunks(user_query: str, top_k: int = 10, rerank_top_k: int = 5)
     # First stage: Retrieve documents using bi-encoder
     query_embedding = retrieval_model.encode(user_query, device='cuda')
     search_results = qdrant_client.search(
-        collection_name="articles",
+        collection_name="articles2",
         query_vector=query_embedding.tolist(),
         limit=top_k,
         with_payload=True
@@ -125,14 +125,14 @@ if __name__ == '__main__':
     sample_query = "Hà Nội có những địa điểm vui chơi giải trí nào?"
     
     print(f"Retrieving relevant chunks for query: '{sample_query}'")
-    relevant_chunks = get_relevant_chunks(sample_query, top_k=3)
+    relevant_chunks = get_relevant_chunks(sample_query, top_k=20, rerank_top_k=10)
 
     if relevant_chunks:
         print(f"Found {len(relevant_chunks)} relevant chunks:")
         for i, chunk_info in enumerate(relevant_chunks):
-            print(f"--- Chunk {i+1} (Score: {chunk_info['initial_score']:.4f}) ---")
+            print(f"--- Chunk {i+1} (Score: {chunk_info['rerank_score']:.4f}) ---")
             print(f"Title: {chunk_info['title']}")
-            print(f"Text: {chunk_info['text']}") # Uncomment to preview
+            print(f"Text: {chunk_info['text']}")
             print("-" * 20)
         
         if openai_client:

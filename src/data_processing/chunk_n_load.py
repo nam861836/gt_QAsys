@@ -30,7 +30,7 @@ client = QdrantClient(
 # Create collection if it doesn't exist
 try:
     client.create_collection(
-        collection_name="articles",
+        collection_name="articles2",
         vectors_config=models.VectorParams(
             size=768,  # Size of the embeddings from vietnamese-bi-encoder
             distance=models.Distance.COSINE
@@ -40,41 +40,75 @@ except Exception as e:
     print(f"Collection might already exist: {e}")
 
 def process_articles():
-    # Load articles
-    with open("./data/articles.json", "r", encoding="utf-8") as f:
+    with open("./data/traveloka_articles.json", "r", encoding="utf-8") as f:
         articles = json.load(f)
     
-    # Process each article
     for article in articles:
-        # Combine all paragraphs into one text
-        text = " ".join(article['content'])
+        metadata = article.get('metadata', {})
+        
+        # Combine content paragraphs
+        content = " ".join(article.get('content', []))
         
         # Split text into chunks
-        chunks = text_splitter.split_text(text)
+        chunks = text_splitter.split_text(content)
         
         # Create embeddings and store in Qdrant
         for i, chunk in enumerate(chunks):
-            # Generate embedding
             embedding = model.encode(chunk, device='cuda')
             
-            # Create metadata
-            metadata = {
+            chunk_metadata = {
                 "article_id": str(uuid.uuid4()),
                 "chunk_index": i,
                 "text": chunk,
-                "title": article['title'],
-                "time": article['time'],
-                "url": article['url']
+                "title": metadata.get('title', ''),
+                "time": metadata.get('time', ''),
+                "url": metadata.get('url', '')
             }
             
-            # Store in Qdrant
             client.upsert(
-                collection_name="articles",
+                collection_name="articles2",
                 points=[
                     models.PointStruct(
                         id=str(uuid.uuid4()),
                         vector=embedding,
-                        payload=metadata
+                        payload=chunk_metadata
+                    )
+                ]
+            )
+
+    # Process articles_transformed.json
+    with open("./data/articles_transformed.json", "r", encoding="utf-8") as f:
+        articles = json.load(f)
+    
+    for article in articles:
+        metadata = article.get('metadata', {})
+        
+        # Combine content paragraphs
+        content = " ".join(article.get('content', []))
+        
+        # Split text into chunks
+        chunks = text_splitter.split_text(content)
+        
+        # Create embeddings and store in Qdrant
+        for i, chunk in enumerate(chunks):
+            embedding = model.encode(chunk, device='cuda')
+            
+            chunk_metadata = {
+                "article_id": str(uuid.uuid4()),
+                "chunk_index": i,
+                "text": chunk,
+                "title": metadata.get('title', ''),
+                "time": metadata.get('time', ''),
+                "url": metadata.get('url', '')
+            }
+            
+            client.upsert(
+                collection_name="articles2",
+                points=[
+                    models.PointStruct(
+                        id=str(uuid.uuid4()),
+                        vector=embedding,
+                        payload=chunk_metadata
                     )
                 ]
             )

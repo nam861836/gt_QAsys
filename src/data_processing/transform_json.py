@@ -23,7 +23,7 @@ def transform_json_structure(input_file, output_file):
         json.dump(transformed_data, f, ensure_ascii=False, indent=2)
 
 if __name__ == "__main__":
-    input_file = "data/articles_test.json"
+    input_file = "data/articles.json"
     output_file = "data/articles_transformed.json"
     transform_json_structure(input_file, output_file)
     print("JSON transformation completed!") 
