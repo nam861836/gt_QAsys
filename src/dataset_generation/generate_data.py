@@ -93,7 +93,7 @@ def generate_qa_pair(context):
         return None
 
 # Generate QA pairs
-N_GENERATIONS = 5  # Number of QA pairs to generate
+N_GENERATIONS = 100  # Number of QA pairs to generate
 print(f"Generating {N_GENERATIONS} QA pairs...")
 
 outputs = []
@@ -111,10 +111,7 @@ for sampled_context in tqdm(random.sample(docs_processed, N_GENERATIONS)):
                 outputs.append({
                     "context": sampled_context.page_content,
                     "question": question,
-                    "answer": answer,
-                    "source_doc": sampled_context.metadata["source"],
-                    "url": sampled_context.metadata.get("url", ""),
-                    "date": sampled_context.metadata.get("date", "")
+                    "answer": answer
                 })
         except Exception as e:
             print(f"Error processing QA pair: {e}")
@@ -132,6 +129,5 @@ for i, qa_pair in enumerate(outputs[:3]):
     print("-" * 50)
     print("Question:", qa_pair["question"])
     print("Answer:", qa_pair["answer"])
-    print("Source:", qa_pair["source_doc"])
     print("-" * 50)
 
